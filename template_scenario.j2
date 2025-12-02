@@ -7,12 +7,12 @@ import random
 from faker import Faker
 fake = Faker("zh_CN")
 
-# --- 全局配置: 可容忍的环境/权限错误码 ---
+# --- 全局配置: 可容忍的错误码 (配置化管理) ---
+# 包含 HTTP 标准错误码和常见业务错误码 (请根据实际项目补充)
 IGNORED_ERROR_CODES = [
-    401, 403, 429,          # HTTP Standard
-    230027, 230003,         # Legacy Support
-    99991663,               # ✅ Feishu Invalid Access Token
-    "PERMISSION_DENIED", "ACCESS_LIMIT_REACHED"
+    401, 403, 429,          # HTTP Standard: Unauthorized, Forbidden, Too Many Requests
+    230027, 230003, 99991663, # Feishu specific (Legacy support)
+    "PERMISSION_DENIED"
 ]
 
 {% for scenario in scenarios %}
@@ -39,7 +39,7 @@ def {{ scenario.scenario_name }}():
                 elif isinstance(v, list):
                     for item in v: smart_inject(item)
 
-                # --- 1. 变异测试标记 ---
+                # --- 1. 变异标记 (Mutation Markers) ---
                 elif v == "__OVERFLOW__": d[k] = "A" * 2048
                 elif v == "__WRONG_TYPE__": d[k] = 123456
                 elif v == "GENERATE_UUID":
@@ -50,7 +50,7 @@ def {{ scenario.scenario_name }}():
                     d[k] = temp_uuid
                     print(f"     🧩 复用UUID: {temp_uuid}")
 
-                # --- 2. 通用模糊匹配注入 (Fuzzy Match Injection) ---
+                # --- 2. 通用模糊匹配注入 (Generic Fuzzy Matching) ---
                 elif isinstance(v, str) and ("raw_data" in v or "Auto_" in v):
                     key_lower = k.lower()
                     if "email" in key_lower: d[k] = fake.email()
@@ -60,8 +60,8 @@ def {{ scenario.scenario_name }}():
                     elif "name" in key_lower or "title" in key_lower: d[k] = f"Auto_{fake.word()}"
                     elif "id" in key_lower and "user" in key_lower: d[k] = "ou_generic_user_id"
 
-                    # ✅ 核心修复：通用内容 JSON 序列化
-                    elif "content" in key_lower or "json" in key_lower:
+                    # ✅ 智能 JSON 封装: 任何包含 content/json/config 的字段都尝试封装为 JSON
+                    elif "content" in key_lower or "json" in key_lower or "config" in key_lower:
                         try:
                             d[k] = json.dumps({"text": f"Auto_Content_{int(time.time())}"})
                         except:
@@ -89,21 +89,39 @@ def {{ scenario.scenario_name }}():
             body[k] = final_list
 
     try:
+        response = None
+        # 🧠 智能大脑 1: 最终一致性轮询 (Eventual Consistency)
+        # 如果是 GET 请求且遇到 404，尝试重试 (Max 3次)
+        {% if step.method == 'GET' %}
+        max_retries = 3
+        for attempt in range(max_retries):
+            response = requests.request("GET", url=url, headers=headers, json=body, params=params, proxies=no_proxy)
+            if response.status_code == 404 and attempt < max_retries - 1:
+                print(f"     ⏳ 数据可能尚未同步，等待 1s 后重试 ({attempt+1}/{max_retries})...")
+                time.sleep(1)
+                continue
+            else:
+                break
+        {% else %}
         response = requests.request("{{ step.method }}", url=url, headers=headers, json=body, params=params, proxies=no_proxy)
+        {% endif %}
+
         print(f"     📡 状态: {response.status_code}")
 
-        # 🌟 智能断言逻辑 V3.0 (通用版)
-        is_expected_fail = "❌" in "{{ step.description }}" or "iso" in "{{ scenario.scenario_name }}"
+        # 🌟 智能断言逻辑 V3.1
+        is_expected_fail = "❌" in "{{ step.description }}" or "❌" in "{{ scenario.description }}" or "iso" in "{{ scenario.scenario_name }}"
 
         if is_expected_fail:
              if response.status_code in [200, 201, 204]:
-                 print(f"     ⚠️ 警告: 逆向用例返回了成功 (可能该字段非必填或校验宽松)")
+                 print(f"     ⚠️ 警告: 逆向用例返回了成功 (可能校验宽松)")
              else:
                  print(f"     ✅ 符合预期: 请求被拒绝 (Code {response.status_code})")
         else:
              if response.status_code not in [200, 201, 204]:
+                 # 🧠 智能大脑 2: 错误码容错
                  try:
                      err_data = response.json()
+                     # 兼容不同接口的错误码字段 (code, status, errcode)
                      err_code = err_data.get("code") or err_data.get("status") or err_data.get("errcode") or response.status_code
                      err_msg = err_data.get("msg") or err_data.get("message") or response.text
 
@@ -118,6 +136,25 @@ def {{ scenario.scenario_name }}():
                      assert response.status_code in [200, 201, 204]
              else:
                  assert response.status_code in [200, 201, 204]
+
+                 # 🧠 智能大脑 3: 深度数据一致性校验 (Deep Verification)
+                 # 仅在写入操作 (POST/PUT) 成功后执行
+                 {% if step.method in ['PUT', 'POST'] and step.body %}
+                 try:
+                     resp_json = response.json()
+                     if isinstance(resp_json, dict) and ("data" in resp_json or "body" in resp_json):
+                         # 提取响应体中的数据部分
+                         resp_data = resp_json.get("data") or resp_json.get("body") or resp_json
+                         req_body = body
+                         for k, v in req_body.items():
+                             # 排除自动生成的不可控字段，只校验核心业务字段是否回显
+                             if k in resp_data and isinstance(v, (str, int)) and "Auto_" not in str(v) and "__" not in str(v):
+                                 if str(resp_data[k]) != str(v):
+                                     print(f"     ⚠️ 数据一致性风险: 请求 {k}={v}, 响应={resp_data[k]}")
+                                 else:
+                                     print(f"     ✅ 数据验证通过: {k}={v}")
+                 except: pass
+                 {% endif %}
 
                  {% if step.extract %}
                  try:

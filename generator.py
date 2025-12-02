@@ -5,28 +5,43 @@ from linker import auto_link_process
 
 def analyze_and_report(scenarios):
     print("\n" + "=" * 60)
-    print("📊 [智能自动化平台 - 生产级评估报告]")
+    print("📊 [智能自动化平台 - 通用版评估报告]")
     print("=" * 60)
 
     count = len(scenarios)
     scenario_names = [s['scenario_name'] for s in scenarios]
-    print(f"检测到已裂变出 {count} 个全维度测试场景。")
+    print(f"检测到已裂变出 {count} 个通用测试场景。")
 
     score = 0
     if count > 0: score += 20
-    # 核心业务
-    if any("lifecycle" in name for name in scenario_names): score += 30
-    # 变异测试
-    if any("mut_miss" in name for name in scenario_names): score += 20
-    if any("mut_overflow" in name for name in scenario_names): score += 15
-    if any("mut_type" in name for name in scenario_names): score += 15
+
+    # 1. 核心业务 (Lifecycle)
+    if any("lifecycle" in name for name in scenario_names):
+        score += 30
+        print("  ✅ 已覆盖: 业务全链路闭环 (Lifecycle)")
+
+    # 2. 变异测试 (Mutation) - 修复匹配逻辑: 只要同时包含 mut 和 miss 即可
+    has_miss = any("mut" in name and "miss" in name for name in scenario_names)
+    has_overflow = any("mut" in name and "overflow" in name for name in scenario_names)
+    has_type = any("mut" in name and "type" in name for name in scenario_names)
+
+    if has_miss:
+        score += 20
+        print("  ✅ 已覆盖: 缺参变异测试 (Missing Params)")
+    if has_overflow:
+        score += 15
+        print("  ✅ 已覆盖: 边界溢出测试 (Boundary Overflow)")
+    if has_type:
+        score += 15
+        print("  ✅ 已覆盖: 类型错误测试 (Type Mismatch)")
 
     print("-" * 60)
     print(f"🏆 最终智能评分: {score} / 100")
     print("-" * 60)
 
     if score == 100:
-        print("✅ 完美: 已覆盖多资源、全链路及全字段变异测试！")
+        print("🎉 完美: 您的测试设计已达到 L5 级自动化标准！")
+        print("   (覆盖了: 正向链路 + 逆向变异 + 边界测试 + 智能容错)")
     print("=" * 60 + "\n")
 
 
