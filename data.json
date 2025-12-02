@@ -1,0 +1,131 @@
+[
+  {
+    "case_name": "msg_01_send",
+    "description": "[消息] 1.发送消息 (生产者)",
+    "url": "https://open.feishu.cn/open-apis/im/v1/messages",
+    "method": "POST",
+    "headers": {
+      "Authorization": "Bearer t-你的",
+      "Content-Type": "application/json"
+    },
+    "params": {
+      "receive_id_type": "chat_id"
+    },
+    "body": {
+      "receive_id": "oc_302c27c16eda0aca5cd9456356e739b8",
+      "msg_type": "text",
+      "content": "{\"text\": \"raw_data:init_msg\"}"
+    }
+  },
+  {
+    "case_name": "msg_02_reply",
+    "description": "[消息] 2.回复消息 (消费者)",
+    "url": "https://open.feishu.cn/open-apis/im/v1/messages/:message_id/reply",
+    "method": "POST",
+    "headers": {
+      "Authorization": "Bearer t-你的",
+      "Content-Type": "application/json"
+    },
+    "params": {},
+    "body": {
+      "msg_type": "text",
+      "content": "{\"text\": \"raw_data:reply_msg\"}"
+    }
+  },
+  {
+    "case_name": "msg_03_edit",
+    "description": "[消息] 3.编辑消息 (消费者)",
+    "url": "https://open.feishu.cn/open-apis/im/v1/messages/:message_id",
+    "method": "PUT",
+    "headers": {
+      "Authorization": "Bearer t-你的",
+      "Content-Type": "application/json"
+    },
+    "params": {},
+    "body": {
+      "msg_type": "text",
+      "content": "{\"text\": \"raw_data:edited_msg\"}"
+    }
+  },
+  {
+    "case_name": "msg_04_forward",
+    "description": "[消息] 4.转发消息 (消费者)",
+    "url": "https://open.feishu.cn/open-apis/im/v1/messages/:message_id/forward",
+    "method": "POST",
+    "headers": {
+      "Authorization": "Bearer t-你的",
+      "Content-Type": "application/json"
+    },
+    "params": {
+      "receive_id_type": "chat_id"
+    },
+    "body": {
+      "receive_id": "oc_302c27c16eda0aca5cd9456356e739b8"
+    }
+  },
+  {
+    "case_name": "msg_05_recall",
+    "description": "[消息] 5.撤回消息 (消费者)",
+    "url": "https://open.feishu.cn/open-apis/im/v1/messages/:message_id",
+    "method": "DELETE",
+    "headers": {
+      "Authorization": "Bearer t-你的"
+    },
+    "params": {}
+  },
+  {
+    "case_name": "status_01_create",
+    "description": "[状态] 1.创建系统状态 (生产者)",
+    "url": "https://open.feishu.cn/open-apis/personal_settings/v1/system_statuses",
+    "method": "POST",
+    "headers": {
+      "Authorization": "Bearer t-你的",
+      "Content-Type": "application/json"
+    },
+    "params": {},
+    "body": {
+      "title": "raw_data:出差中",
+      "color": "BLUE",
+      "icon_key": "GeneralBusinessTrip",
+      "sync_setting": {
+        "is_open_by_default": true,
+        "title": "出差期间自动开启"
+      }
+    },
+    "extract": {
+      "auto_system_statuses_id": "data.system_status.system_status_id"
+    }
+  },
+  {
+    "case_name": "status_02_update",
+    "description": "[状态] 2.修改系统状态 (消费者)",
+    "url": "https://open.feishu.cn/open-apis/personal_settings/v1/system_statuses/:system_status_id",
+    "method": "PATCH",
+    "headers": {
+      "Authorization": "Bearer t-你的",
+      "Content-Type": "application/json"
+    },
+    "params": {},
+    "body": {
+      "system_status": {
+        "title": "raw_data:修改后的状态",
+        "color": "BLUE",
+        "icon_key": "GeneralBusinessTrip"
+      },
+      "update_fields": [
+        "TITLE",
+        "ICON"
+      ]
+    }
+  },
+  {
+    "case_name": "status_03_delete",
+    "description": "[状态] 3.删除系统状态 (消费者)",
+    "url": "https://open.feishu.cn/open-apis/personal_settings/v1/system_statuses/:system_status_id",
+    "method": "DELETE",
+    "headers": {
+      "Authorization": "Bearer t-你的"
+    },
+    "params": {}
+  }
+]

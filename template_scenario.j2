@@ -1,0 +1,75 @@
+import requests
+import json
+import pytest
+import time
+import random
+from faker import Faker
+fake = Faker("zh_CN")
+
+{% for scenario in scenarios %}
+def {{ scenario.scenario_name }}():
+    """ {{ scenario.description }} """
+    print(f"\n🚀 执行: {{ scenario.description }}")
+    vars_pool = {}
+    no_proxy = {"http": None, "https": None}
+
+    {% for step in scenario.steps %}
+    print(f"  👉 Step: {{ step.method }} - {{ step.url }}")
+    random_text = f"{fake.word()}_{int(time.time())}"
+
+    url = "{{ step.url }}"
+    headers = {{ step.headers }}
+    body = {{ step.body }}
+    params = {{ step.params }}
+
+    def smart_inject(d):
+        if isinstance(d, dict):
+            for k, v in d.items():
+                if isinstance(v, dict): smart_inject(v)
+                elif isinstance(v, list):
+                    for item in v: smart_inject(item)
+                elif isinstance(v, str) and "raw_data" in v:
+                    if k in ["title", "name"]: d[k] = f"Auto_{fake.word()}"[:10]
+                    elif k == "content":
+                        try: d[k] = json.dumps({"text": f"🤖 {random_text}"})
+                        except: pass
+                    else: d[k] = f"🤖 {random_text}"
+        return d
+    body = smart_inject(body)
+
+    for k, v in vars_pool.items():
+        if f"${k}" in url:
+            url = url.replace(f"${k}", str(v))
+            print(f"     🔄 替换URL: ${k} -> {v}")
+
+    try:
+        response = requests.request("{{ step.method }}", url=url, headers=headers, json=body, params=params, proxies=no_proxy)
+        print(f"     📡 状态: {response.status_code}")
+
+        # 精准断言：只看当前步骤
+        if "❌" in "{{ step.description }}" or "isolated" in "{{ scenario.scenario_name }}":
+             if response.status_code == 200:
+                 pytest.fail(f"❌ 预期失败(非200)，但实际成功了")
+             else:
+                 print(f"     ✅ 符合预期: 拒绝 (Code {response.status_code})")
+        else:
+             if response.status_code != 200:
+                 print(f"❌ 失败: {response.text}")
+             assert response.status_code == 200
+
+             {% if step.extract %}
+             try:
+                 extracts = {{ step.extract }}
+                 for var, path in extracts.items():
+                     val = response.json()
+                     for p in path.split('.'): val = val.get(p, {})
+                     if isinstance(val, (str, int)):
+                         vars_pool[var] = val
+                         print(f"     ✅ 提取成功: ${var} = {val}")
+             except: pass
+             {% endif %}
+    except Exception as e:
+        print(f"❌ 异常: {e}"); raise e
+    {% endfor %}
+    print("✅ 通过")
+{% endfor %}
