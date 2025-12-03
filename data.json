@@ -4,7 +4,7 @@
     "description": "[消息] 1.发送消息 (生产者)",
     "url": "https://open.feishu.cn/open-apis/im/v1/messages",
     "method": "POST",
-    "headers": {"Authorization": "Bearer t-g104c2kkAO7GDVY7LWPGCEK65MSR4M4HFTZGS3EM", "Content-Type": "application/json"},
+    "headers": {"Authorization": "Bearer t-g104c3adIURPWYQYNV56AXILLCSI737OCWKZWRH3", "Content-Type": "application/json"},
     "params": {"receive_id_type": "user_id"},
     "body": {"receive_id": "3ea4447b", "msg_type": "text", "content": "{\"text\": \"raw_data:init_msg\"}"}
   },
@@ -13,7 +13,7 @@
     "description": "[消息] 2.获取消息详情 (消费者)",
     "url": "https://open.feishu.cn/open-apis/im/v1/messages/:message_id",
     "method": "GET",
-    "headers": {"Authorization": "Bearer t-g104c2kkAO7GDVY7LWPGCEK65MSR4M4HFTZGS3EM"},
+    "headers": {"Authorization": "Bearer t-g104c3adIURPWYQYNV56AXILLCSI737OCWKZWRH3"},
     "params": {}
   },
   {
@@ -21,7 +21,7 @@
     "description": "[消息] 3.查询已读信息 (消费者)",
     "url": "https://open.feishu.cn/open-apis/im/v1/messages/:message_id/read_users",
     "method": "GET",
-    "headers": {"Authorization": "Bearer t-g104c2kkAO7GDVY7LWPGCEK65MSR4M4HFTZGS3EM"},
+    "headers": {"Authorization": "Bearer t-g104c3adIURPWYQYNV56AXILLCSI737OCWKZWRH3"},
     "params": {"user_id_type": "open_id"}
   },
   {
@@ -29,7 +29,7 @@
     "description": "[消息] 4.编辑消息 (消费者)",
     "url": "https://open.feishu.cn/open-apis/im/v1/messages/:message_id",
     "method": "PUT",
-    "headers": {"Authorization": "Bearer t-g104c2kkAO7GDVY7LWPGCEK65MSR4M4HFTZGS3EM", "Content-Type": "application/json"},
+    "headers": {"Authorization": "Bearer t-g104c3adIURPWYQYNV56AXILLCSI737OCWKZWRH3", "Content-Type": "application/json"},
     "params": {},
     "body": {"msg_type": "text", "content": "{\"text\": \"raw_data:edited\"}"}
   },
@@ -38,7 +38,7 @@
     "description": "[消息] 5.回复消息 (消费者)",
     "url": "https://open.feishu.cn/open-apis/im/v1/messages/:message_id/reply",
     "method": "POST",
-    "headers": {"Authorization": "Bearer t-g104c2kkAO7GDVY7LWPGCEK65MSR4M4HFTZGS3EM", "Content-Type": "application/json"},
+    "headers": {"Authorization": "Bearer t-g104c3adIURPWYQYNV56AXILLCSI737OCWKZWRH3", "Content-Type": "application/json"},
     "params": {},
     "body": {"msg_type": "text", "content": "{\"text\": \"raw_data:reply\"}"}
   },
@@ -47,7 +47,7 @@
     "description": "[消息] 7.转发消息 (消费者)",
     "url": "https://open.feishu.cn/open-apis/im/v1/messages/:message_id/forward",
     "method": "POST",
-    "headers": {"Authorization": "Bearer t-g104c2kkAO7GDVY7LWPGCEK65MSR4M4HFTZGS3EM", "Content-Type": "application/json"},
+    "headers": {"Authorization": "Bearer t-g104c3adIURPWYQYNV56AXILLCSI737OCWKZWRH3", "Content-Type": "application/json"},
     "params": {"receive_id_type": "user_id"},
     "body": {"receive_id": "3ea4447b"}
   },
@@ -56,7 +56,7 @@
     "description": "[消息] 8.撤回消息 (消费者)",
     "url": "https://open.feishu.cn/open-apis/im/v1/messages/:message_id",
     "method": "DELETE",
-    "headers": {"Authorization": "Bearer t-g104c2kkAO7GDVY7LWPGCEK65MSR4M4HFTZGS3EM"},
+    "headers": {"Authorization": "Bearer t-g104c3adIURPWYQYNV56AXILLCSI737OCWKZWRH3"},
     "params": {}
   },
   {
@@ -64,7 +64,7 @@
     "description": "[消息] 获取历史消息 (独立查询)",
     "url": "https://open.feishu.cn/open-apis/im/v1/messages",
     "method": "GET",
-    "headers": {"Authorization": "Bearer t-g104c2kkAO7GDVY7LWPGCEK65MSR4M4HFTZGS3EM"},
+    "headers": {"Authorization": "Bearer t-g104c3adIURPWYQYNV56AXILLCSI737OCWKZWRH3"},
     "params": {"container_id_type": "chat", "container_id": "oc_302c27c16eda0aca5cd9456356e739b8"}
   }
 ]
