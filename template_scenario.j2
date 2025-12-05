@@ -29,62 +29,109 @@ def {{ scenario.scenario_name }}():
     body = {{ step.body }}
     params = {{ step.params }}
 
-    def smart_inject(d):
+    def smart_inject(d, is_params=False):
+        """
+        对 body / params 做智能注入:
+        - 处理 GENERATE_UUID / 变异标记
+        - 处理 raw_data:xxx 占位符
+        - 对 params 中的一些 raw_data 字段直接删除(可选字段)，避免 99992402
+        """
         nonlocal temp_uuid
-        if isinstance(d, dict):
-            for k, v in d.items():
-                if isinstance(v, dict): smart_inject(v)
-                elif isinstance(v, list):
-                    for item in v: smart_inject(item)
+        if not isinstance(d, dict):
+            return d
 
-                # --- 1. 变异标记 ---
-                elif v == "__OVERFLOW__": d[k] = "A" * 2048
-                elif v == "__WRONG_TYPE__": d[k] = 123456
-                elif v == "GENERATE_UUID":
-                    temp_uuid = str(uuid.uuid4())
-                    d[k] = temp_uuid
-                    print(f"     🧩 生成UUID: {temp_uuid}")
-                elif v == "reuse_uuid_from_step_1":
-                    d[k] = temp_uuid
-                    print(f"     🧩 复用UUID: {temp_uuid}")
+        # 为了支持删除字段，先拿一个列表记录要删的 key
+        keys_to_delete = []
 
-                # --- 2. 通用模糊匹配 ---
-                elif isinstance(v, str) and ("raw_data" in v or "Auto_" in v):
-                    key_lower = k.lower()
-                    if "email" in key_lower: d[k] = fake.email()
-                    elif "phone" in key_lower or "mobile" in key_lower: d[k] = f"+8613{fake.numerify('#########')}"
-                    elif "url" in key_lower or "link" in key_lower: d[k] = fake.url()
-                    elif "ip" in key_lower: d[k] = fake.ipv4()
-                    elif "name" in key_lower or "title" in key_lower:
-                        d[k] = f"Auto_{fake.word()}_{random.randint(1,999)}"
-                    elif "id" in key_lower and "user" in key_lower: d[k] = "ou_generic_user_id"
+        for k, v in list(d.items()):
+            # 递归子结构
+            if isinstance(v, dict):
+                smart_inject(v, is_params=is_params)
+            elif isinstance(v, list):
+                for item in v:
+                    if isinstance(item, dict):
+                        smart_inject(item, is_params=is_params)
 
-                    elif "content" in key_lower or "json" in key_lower or "config" in key_lower:
-                        try:
-                            d[k] = json.dumps({"text": f"Auto_Content_{int(time.time())}"})
-                        except:
-                            d[k] = f"Auto_{k}_{int(time.time())}"
-                    elif "priority" in key_lower:
-                         d[k] = random.randint(2, 100)
-                    else:
+            # --- 1. 变异标记 ---
+            elif v == "__OVERFLOW__":
+                d[k] = "A" * 2048
+            elif v == "__WRONG_TYPE__":
+                d[k] = 123456
+            elif v == "GENERATE_UUID":
+                temp_uuid = str(uuid.uuid4())
+                d[k] = temp_uuid
+                print(f"     🧩 生成UUID: {temp_uuid}")
+            elif v == "reuse_uuid_from_step_1":
+                d[k] = temp_uuid
+                print(f"     🧩 复用UUID: {temp_uuid}")
+
+            # --- 2. raw_data / Auto_ 占位符处理 ---
+            elif isinstance(v, str) and ("raw_data" in v or "Auto_" in v):
+                key_lower = k.lower()
+
+                # 对 params 的特殊处理：一些 raw_data 直接丢掉，避免字段校验失败
+                if is_params and v.startswith("raw_data:"):
+                    # 这些字段都是可选的 / 容易填错，统一不传即可
+                    if (
+                        "page_size" in key_lower
+                        or "page_token" in key_lower
+                        or "sort_type" in key_lower
+                        or "start_time" in key_lower
+                        or "end_time" in key_lower
+                    ):
+                        keys_to_delete.append(k)
+                        continue
+
+                # 通用生成逻辑（body 或 params 的其他字段）
+                if "email" in key_lower:
+                    d[k] = fake.email()
+                elif "phone" in key_lower or "mobile" in key_lower:
+                    d[k] = f"+8613{fake.numerify('#########')}"
+                elif "url" in key_lower or "link" in key_lower:
+                    d[k] = fake.url()
+                elif "ip" in key_lower:
+                    d[k] = fake.ipv4()
+                elif "name" in key_lower or "title" in key_lower:
+                    d[k] = f"Auto_{fake.word()}_{random.randint(1,999)}"
+                elif "id" in key_lower and "user" in key_lower:
+                    # 给一个通用的 user id，占位即可
+                    d[k] = "ou_generic_user_id"
+                elif "content" in key_lower or "json" in key_lower or "config" in key_lower:
+                    try:
+                        d[k] = json.dumps({"text": f"Auto_Content_{int(time.time())}"})
+                    except Exception:
                         d[k] = f"Auto_{k}_{int(time.time())}"
+                elif "priority" in key_lower:
+                    d[k] = random.randint(2, 100)
+                else:
+                    d[k] = f"Auto_{k}_{int(time.time())}"
+
+        # 统一删除本轮标记为删除的字段（主要针对 params）
+        for k in keys_to_delete:
+            d.pop(k, None)
+
         return d
 
-    body = smart_inject(body)
+    # 对 body/params 都做一次智能注入
+    body = smart_inject(body, is_params=False)
+    params = smart_inject(params, is_params=True)
 
+    # URL 中的 $var 替换
     for k, v in vars_pool.items():
         if f"${k}" in url:
             url = url.replace(f"${k}", str(v))
             print(f"     🔄 替换URL: ${k} -> {v}")
 
-    for k, v in body.items():
+    # 列表里如果有 "$var" 也做一次替换
+    for k, v in list(body.items()):
         if isinstance(v, list):
             final_list = []
             for item in v:
                 if isinstance(item, str) and item.startswith("$") and item[1:] in vars_pool:
                     final_list.append(vars_pool[item[1:]])
                     print(f"     🔄 列表注入: {item} -> {vars_pool[item[1:]]}")
-                else: final_list.append(item)
+                else:
+                    final_list.append(item)
             body[k] = final_list
 
     try:
@@ -110,56 +157,60 @@ def {{ scenario.scenario_name }}():
         is_expected_fail = "❌" in "{{ step.description }}" or "❌" in "{{ scenario.description }}" or "iso" in "{{ scenario.scenario_name }}"
 
         if is_expected_fail:
-             if response.status_code in [200, 201, 204]:
-                 print(f"     ⚠️ 警告: 逆向用例返回了成功 (可能校验宽松)")
-             else:
-                 print(f"     ✅ 符合预期: 请求被拒绝 (Code {response.status_code})")
+            if response.status_code in [200, 201, 204]:
+                print(f"     ⚠️ 警告: 逆向用例返回了成功 (可能校验宽松)")
+            else:
+                print(f"     ✅ 符合预期: 请求被拒绝 (Code {response.status_code})")
         else:
-             if response.status_code not in [200, 201, 204]:
-                 try:
-                     err_data = response.json()
-                     err_code = err_data.get("code") or err_data.get("status") or response.status_code
-                     err_msg = err_data.get("msg") or response.text
-                     if err_code in IGNORED_ERROR_CODES:
-                         print(f"     ⚠️ 警告: 环境/权限限制 (Code {err_code}) - {err_msg}")
-                     else:
-                         print(f"❌ 失败: {response.text}")
-                         assert response.status_code in [200, 201, 204]
-                 except:
-                     print(f"❌ 失败 (非JSON响应): {response.text}")
-                     assert response.status_code in [200, 201, 204]
-             else:
-                 assert response.status_code in [200, 201, 204]
+            if response.status_code not in [200, 201, 204]:
+                try:
+                    err_data = response.json()
+                    err_code = err_data.get("code") or err_data.get("status") or response.status_code
+                    err_msg = err_data.get("msg") or response.text
+                    if err_code in IGNORED_ERROR_CODES:
+                        print(f"     ⚠️ 警告: 环境/权限限制 (Code {err_code}) - {err_msg}")
+                    else:
+                        print(f"❌ 失败: {response.text}")
+                        assert response.status_code in [200, 201, 204]
+                except Exception:
+                    print(f"❌ 失败 (非JSON响应): {response.text}")
+                    assert response.status_code in [200, 201, 204]
+            else:
+                assert response.status_code in [200, 201, 204]
 
-                 # 🧠 智能大脑 3: 深度数据一致性校验
-                 {% if step.method in ['PUT', 'POST'] and step.body %}
-                 try:
-                     resp_json = response.json()
-                     if isinstance(resp_json, dict) and ("data" in resp_json or "body" in resp_json):
-                         resp_data = resp_json.get("data") or resp_json.get("body") or resp_json
-                         req_body = body
-                         for k, v in req_body.items():
-                             if k in resp_data and isinstance(v, (str, int)) and "Auto_" not in str(v) and "__" not in str(v):
-                                 if str(resp_data[k]) != str(v):
-                                     print(f"     ⚠️ 数据一致性风险: 请求 {k}={v}, 响应={resp_data[k]}")
-                                 else:
-                                     print(f"     ✅ 数据验证通过: {k}={v}")
-                 except: pass
-                 {% endif %}
+                # 🧠 智能大脑 3: 深度数据一致性校验
+                {% if step.method in ['PUT', 'POST'] and step.body %}
+                try:
+                    resp_json = response.json()
+                    if isinstance(resp_json, dict) and ("data" in resp_json or "body" in resp_json):
+                        resp_data = resp_json.get("data") or resp_json.get("body") or resp_json
+                        req_body = body
+                        for k, v in req_body.items():
+                            if k in resp_data and isinstance(v, (str, int)) and "Auto_" not in str(v) and "__" not in str(v):
+                                if str(resp_data[k]) != str(v):
+                                    print(f"     ⚠️ 数据一致性风险: 请求 {k}={v}, 响应={resp_data[k]}")
+                                else:
+                                    print(f"     ✅ 数据验证通过: {k}={v}")
+                except Exception:
+                    pass
+                {% endif %}
 
-                 {% if step.extract %}
-                 try:
-                     extracts = {{ step.extract }}
-                     for var, path in extracts.items():
-                         val = response.json()
-                         for p in path.split('.'): val = val.get(p, {})
-                         if isinstance(val, (str, int)) and val:
-                             vars_pool[var] = val
-                             print(f"     ✅ 提取成功: ${var} = {val}")
-                 except: pass
-                 {% endif %}
+                {% if step.extract %}
+                try:
+                    extracts = {{ step.extract }}
+                    for var, path in extracts.items():
+                        val = response.json()
+                        for p in path.split('.'):
+                            val = val.get(p, {})
+                        if isinstance(val, (str, int)) and val:
+                            vars_pool[var] = val
+                            print(f"     ✅ 提取成功: ${var} = {val}")
+                except Exception:
+                    pass
+                {% endif %}
     except Exception as e:
-        print(f"❌ 异常: {e}"); raise e
+        print(f"❌ 异常: {e}")
+        raise e
     {% endfor %}
     print("✅ 通过")
 {% endfor %}
